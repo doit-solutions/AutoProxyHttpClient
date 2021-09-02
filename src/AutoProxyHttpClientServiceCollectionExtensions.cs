@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoProxyHttpClient;
+using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Extensions.Http;
 using SocksSharp;
@@ -35,14 +36,16 @@ namespace Microsoft.Extensions.DependencyInjection
         {
             private static readonly PreferredGeographicProxyLocation[] PreferredGeographicProxyLocationNone = new PreferredGeographicProxyLocation[] { PreferredGeographicProxyLocation.None };
 
+            private readonly ILogger<PrioritizedProxyMessageHandler> _logger;
             private readonly ProxyScrapeApi _proxyApi;
             private readonly bool _rotateProxies;
             private readonly PreferredGeographicProxyLocation[] _preferredLocations;
 
             private ICollection<ProxyScrapeProxy> _availableProxies = Array.Empty<ProxyScrapeProxy>();
 
-            public PrioritizedProxyMessageHandler(ProxyScrapeApi proxyApi, bool rotateProxies, params PreferredGeographicProxyLocation[] preferredLocations)
+            public PrioritizedProxyMessageHandler(ILogger<PrioritizedProxyMessageHandler> logger, ProxyScrapeApi proxyApi, bool rotateProxies, params PreferredGeographicProxyLocation[] preferredLocations)
             {
+                _logger = logger;
                 _proxyApi = proxyApi;
                 _rotateProxies = rotateProxies;
                 _preferredLocations = preferredLocations?.Any() ?? false ? preferredLocations : PreferredGeographicProxyLocationNone;
@@ -52,8 +55,10 @@ namespace Microsoft.Extensions.DependencyInjection
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                _logger.LogDebug("Starting proxied HTTP {HttpMethod} request to URI {HttpRequestUri}.", request.Method, request.RequestUri);
                 if (!_availableProxies.Any())
                 {
+                    _logger.LogDebug("List of available proxies is empty, fetching list of proxies.");
                     foreach (var preferredLocation in _preferredLocations)
                     {
                         _availableProxies = await _proxyApi.ListAvailableProxiesAsync(preferredLocation, cancellationToken);
@@ -68,6 +73,7 @@ namespace Microsoft.Extensions.DependencyInjection
                 while (_availableProxies?.Any() ?? false)
                 {
                     var proxy = _availableProxies.First();
+                    _logger.LogDebug("Attempting to make HTTP request using SOCKS5 proxy at {Socks5ProxyIpAddress}:{Socks5ProxyPort}.", proxy.Host, proxy.Port);
                     if (_rotateProxies)
                     {
                         _availableProxies = _availableProxies.Skip(1).Concat(_availableProxies.Take(1).ToList()).ToList();
@@ -80,13 +86,15 @@ namespace Microsoft.Extensions.DependencyInjection
                         }
                         return await base.SendAsync(request, cancellationToken);
                     }
-                    catch
+                    catch (Exception e)
                     {
+                        _logger.LogDebug(e, "Attempt to make HTTP request failed, removing SOCKS5 proxy at {Socks5ProxyIpAddress}:{Socks5ProxyPort} from list of available proxies.", proxy.Host, proxy.Port);
                         // Remove the bad proxy and try again (as long as we have other proxies to try).
                         _availableProxies = _availableProxies.Where(p => !p.Host.Equals(proxy.Host) || p.Port != proxy.Port).ToList();
                     }
                 }
 
+                _logger.LogWarning("List of available proxies has been exhausted, HTTP request has failed.");
                 throw new NoProxyAvailableException();
             }
         }
@@ -124,7 +132,7 @@ namespace Microsoft.Extensions.DependencyInjection
         private static IHttpClientBuilder ConfigureProxyClient(this IHttpClientBuilder builder, AutoProxyHttpClientOptions options)
         {
             return builder
-                .ConfigurePrimaryHttpMessageHandler(services => new PrioritizedProxyMessageHandler(services.GetRequiredService<ProxyScrapeApi>(), options.RotateProxies, options.PreferredLocations))
+                .ConfigurePrimaryHttpMessageHandler(services => new PrioritizedProxyMessageHandler(services.GetRequiredService<ILogger<PrioritizedProxyMessageHandler>>(), services.GetRequiredService<ProxyScrapeApi>(), options.RotateProxies, options.PreferredLocations))
                 .AddPolicyHandler(CreateProxyPolicy());
         }
 
