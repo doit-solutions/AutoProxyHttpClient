@@ -94,11 +94,11 @@ namespace Microsoft.Extensions.DependencyInjection
                             var tmp = await base.SendAsync(request, cancellationToken);
                             if ((tmp.StatusCode != System.Net.HttpStatusCode.Moved && tmp.StatusCode != System.Net.HttpStatusCode.MovedPermanently && tmp.StatusCode != System.Net.HttpStatusCode.Redirect) || tmp.Headers.Location == null)
                             {
-                                _logger.LogDebug("Following redirect (HTTP status code {HttpStatusCode}) from {Uri} to {RedirectUri}.", (int)tmp.StatusCode, request.RequestUri, tmp.Headers.Location);
                                 resp = tmp;
                             }
                             else
                             {
+                                _logger.LogDebug("Following redirect (HTTP status code {HttpStatusCode}) from {Uri} to {RedirectUri}.", (int)tmp.StatusCode, request.RequestUri, tmp.Headers.Location);
                                 request.RequestUri = tmp.Headers.Location;
                             }
                         }
@@ -107,6 +107,10 @@ namespace Microsoft.Extensions.DependencyInjection
                     }
                     catch (Exception e)
                     {
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            throw;
+                        }
                         _logger.LogDebug(e, "Attempt to make HTTP request failed, removing SOCKS5 proxy at {Socks5ProxyIpAddress}:{Socks5ProxyPort} from list of available proxies.", proxy.Host, proxy.Port);
                         // Remove the bad proxy and try again (as long as we have other proxies to try).
                         _availableProxies = _availableProxies.Where(p => !p.Host.Equals(proxy.Host) || p.Port != proxy.Port).ToList();
