@@ -92,7 +92,7 @@ namespace Microsoft.Extensions.DependencyInjection
                                 ih.Proxy.Settings = new ProxySettings { Host = proxy.Host.ToString(), Port = proxy.Port };
                             }
                             var tmp = await base.SendAsync(request, cancellationToken);
-                            if ((tmp.StatusCode != System.Net.HttpStatusCode.Moved && tmp.StatusCode != System.Net.HttpStatusCode.MovedPermanently) || tmp.Headers.Location == null)
+                            if ((tmp.StatusCode != System.Net.HttpStatusCode.Moved && tmp.StatusCode != System.Net.HttpStatusCode.MovedPermanently && tmp.StatusCode != System.Net.HttpStatusCode.Redirect) || tmp.Headers.Location == null)
                             {
                                 resp = tmp;
                             }
