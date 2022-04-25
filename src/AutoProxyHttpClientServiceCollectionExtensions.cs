@@ -84,11 +84,25 @@ namespace Microsoft.Extensions.DependencyInjection
                     }
                     try
                     {
-                        if (InnerHandler is ProxyClientHandler<Socks5> ih)
+                        HttpResponseMessage? resp = null;
+                        do
                         {
-                            ih.Proxy.Settings = new ProxySettings { Host = proxy.Host.ToString(), Port = proxy.Port };
+                            if (InnerHandler is ProxyClientHandler<Socks5> ih)
+                            {
+                                ih.Proxy.Settings = new ProxySettings { Host = proxy.Host.ToString(), Port = proxy.Port };
+                            }
+                            var tmp = await base.SendAsync(request, cancellationToken);
+                            if ((tmp.StatusCode != System.Net.HttpStatusCode.Moved && tmp.StatusCode != System.Net.HttpStatusCode.MovedPermanently) || tmp.Headers.Location == null)
+                            {
+                                resp = tmp;
+                            }
+                            else
+                            {
+                                request.RequestUri = tmp.Headers.Location;
+                            }
                         }
-                        return await base.SendAsync(request, cancellationToken);
+                        while (resp == null);
+                        return resp;
                     }
                     catch (Exception e)
                     {
