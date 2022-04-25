@@ -94,6 +94,7 @@ namespace Microsoft.Extensions.DependencyInjection
                             var tmp = await base.SendAsync(request, cancellationToken);
                             if ((tmp.StatusCode != System.Net.HttpStatusCode.Moved && tmp.StatusCode != System.Net.HttpStatusCode.MovedPermanently && tmp.StatusCode != System.Net.HttpStatusCode.Redirect) || tmp.Headers.Location == null)
                             {
+                                _logger.LogDebug("Following redirect (HTTP status code {HttpStatusCode}) from {Uri} to {RedirectUri}.", (int)tmp.StatusCode, request.RequestUri, tmp.Headers.Location);
                                 resp = tmp;
                             }
                             else
