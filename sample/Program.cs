@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace AutoProxyHttpClient.Sample
 {
@@ -11,11 +12,16 @@ namespace AutoProxyHttpClient.Sample
         {
             await Host
                 .CreateDefaultBuilder(args)
+                .ConfigureLogging((ctx, builder) => builder
+                    .SetMinimumLevel(LogLevel.Debug)
+                    .AddDebug()
+                    .AddConsole()
+                )
                 .ConfigureServices((hostContext, services) =>
                 {
                     services
                         .AddHostedService<Program>()
-                        .AddAutoProxyHttpClient<GeoIpClient>(AutoProxyHttpClientOptions.Create(rotateProxies: true/*, PreferredGeographicProxyLocation.EU*/))
+                        .AddAutoProxyHttpClient<GeoIpClient>(AutoProxyHttpClientOptions.Create(apiKey: null, rotateProxies: true/*, PreferredGeographicProxyLocation.EU*/))
                             .ConfigureHttpClient(c => c.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36 Edg/91.0.864.59"));
                 })
                 .UseConsoleLifetime()

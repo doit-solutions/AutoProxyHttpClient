@@ -15,17 +15,19 @@ namespace Microsoft.Extensions.DependencyInjection
 {
     public record AutoProxyHttpClientOptions
     {
-        public static AutoProxyHttpClientOptions Default = Create(false);
+        public static AutoProxyHttpClientOptions Default = Create(null, false);
 
-        public static AutoProxyHttpClientOptions Create(bool rotateProxies, params PreferredGeographicProxyLocation[] preferredLocations)
+        public static AutoProxyHttpClientOptions Create(string? apiKey, bool rotateProxies, params PreferredGeographicProxyLocation[] preferredLocations)
         {
             return new AutoProxyHttpClientOptions
             {
+                ApiKey = apiKey,
                 RotateProxies = rotateProxies,
                 PreferredLocations = preferredLocations
             };
         }
 
+        public string? ApiKey { get; set; }
         public bool RotateProxies { get; set; } = false;
         public PreferredGeographicProxyLocation[] PreferredLocations { get; set; } = new PreferredGeographicProxyLocation[] { PreferredGeographicProxyLocation.None };
     }
@@ -38,15 +40,17 @@ namespace Microsoft.Extensions.DependencyInjection
 
             private readonly ILogger<PrioritizedProxyMessageHandler> _logger;
             private readonly ProxyScrapeApi _proxyApi;
+            private readonly string? _apiKey;
             private readonly bool _rotateProxies;
             private readonly PreferredGeographicProxyLocation[] _preferredLocations;
 
             private ICollection<ProxyScrapeProxy> _availableProxies = Array.Empty<ProxyScrapeProxy>();
 
-            public PrioritizedProxyMessageHandler(ILogger<PrioritizedProxyMessageHandler> logger, ProxyScrapeApi proxyApi, bool rotateProxies, params PreferredGeographicProxyLocation[] preferredLocations)
+            public PrioritizedProxyMessageHandler(ILogger<PrioritizedProxyMessageHandler> logger, ProxyScrapeApi proxyApi, string? apiKey, bool rotateProxies, params PreferredGeographicProxyLocation[] preferredLocations)
             {
                 _logger = logger;
                 _proxyApi = proxyApi;
+                _apiKey = apiKey;
                 _rotateProxies = rotateProxies;
                 _preferredLocations = preferredLocations?.Any() ?? false ? preferredLocations : PreferredGeographicProxyLocationNone;
 
@@ -61,7 +65,7 @@ namespace Microsoft.Extensions.DependencyInjection
                     _logger.LogDebug("List of available proxies is empty, fetching list of proxies.");
                     foreach (var preferredLocation in _preferredLocations)
                     {
-                        _availableProxies = await _proxyApi.ListAvailableProxiesAsync(preferredLocation, cancellationToken);
+                        _availableProxies = await _proxyApi.ListAvailableProxiesAsync(preferredLocation, _apiKey, cancellationToken);
                         if (_availableProxies.Any())
                         {
                             break;
@@ -132,7 +136,7 @@ namespace Microsoft.Extensions.DependencyInjection
         private static IHttpClientBuilder ConfigureProxyClient(this IHttpClientBuilder builder, AutoProxyHttpClientOptions options)
         {
             return builder
-                .ConfigurePrimaryHttpMessageHandler(services => new PrioritizedProxyMessageHandler(services.GetRequiredService<ILogger<PrioritizedProxyMessageHandler>>(), services.GetRequiredService<ProxyScrapeApi>(), options.RotateProxies, options.PreferredLocations))
+                .ConfigurePrimaryHttpMessageHandler(services => new PrioritizedProxyMessageHandler(services.GetRequiredService<ILogger<PrioritizedProxyMessageHandler>>(), services.GetRequiredService<ProxyScrapeApi>(), options.ApiKey, options.RotateProxies, options.PreferredLocations))
                 .AddPolicyHandler(CreateProxyPolicy());
         }
 
