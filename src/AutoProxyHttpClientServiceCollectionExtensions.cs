@@ -99,7 +99,7 @@ namespace Microsoft.Extensions.DependencyInjection
                             else
                             {
                                 _logger.LogDebug("Following redirect (HTTP status code {HttpStatusCode}) from {Uri} to {RedirectUri}.", (int)tmp.StatusCode, request.RequestUri, tmp.Headers.Location);
-                                request.RequestUri = tmp.Headers.Location;
+                                request.RequestUri = !tmp.Headers.Location.IsAbsoluteUri && request.RequestUri != null ? new Uri(request.RequestUri, tmp.Headers.Location) : tmp.Headers.Location;
                             }
                         }
                         while (resp == null);
